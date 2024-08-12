@@ -1,0 +1,69 @@
+---
+- name: Deploy Red Hat CoreOS VM on vCenter
+  hosts: localhost
+  gather_facts: no
+  vars:
+    vcenter_hostname: "vcenter.example.com"
+    vcenter_username: "administrator@vsphere.local"
+    vcenter_password: "your_password"
+    datacenter_name: "DatacenterName"
+    cluster_name: "ClusterName"
+    datastore_name: "DatastoreName"
+    vm_name: "CoreOS-VM"
+    vm_template: "CoreOS-Template"
+    vm_folder: "VMs"
+    vm_network: "VM Network"
+    vm_disk_size: 200000 # Disk size in MB (200GB)
+    vm_cpu: 2
+    vm_memory: 4096 # Memory in MB (4GB)
+    guest_os: "coreos64Guest" # Guest OS identifier for Red Hat CoreOS
+
+  tasks:
+    - name: Deploy VM from template in powered off state
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter: "{{ datacenter_name }}"
+        cluster: "{{ cluster_name }}"
+        datastore: "{{ datastore_name }}"
+        name: "{{ vm_name }}"
+        template: "{{ vm_template }}"
+        folder: "{{ vm_folder }}"
+        networks:
+          - name: "{{ vm_network }}"
+        hardware:
+          memory_mb: "{{ vm_memory }}"
+          num_cpus: "{{ vm_cpu }}"
+          scsi: paravirtual
+        state: present
+      delegate_to: localhost
+
+    - name: Resize the disk to 200GB
+      community.vmware.vmware_guest_disk:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter: "{{ datacenter_name }}"
+        cluster: "{{ cluster_name }}"
+        name: "{{ vm_name }}"
+        disk:
+          - size_gb: "{{ vm_disk_size // 1024 }}"
+            type: thin
+            datastore: "{{ datastore_name }}"
+            state: present
+      delegate_to: localhost
+
+    - name: Power on the VM
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter: "{{ datacenter_name }}"
+        name: "{{ vm_name }}"
+        state: poweredon
+        wait_for_ip_address: yes
+      delegate_to: localhost
