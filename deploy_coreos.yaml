@@ -1,5 +1,5 @@
 ---
-- name: Deploy Red Hat CoreOS VM on vCenter
+- name: Deploy and configure multiple Red Hat CoreOS VMs on vCenter
   hosts: localhost
   gather_facts: no
   vars:
@@ -9,7 +9,6 @@
     datacenter_name: "DatacenterName"
     cluster_name: "ClusterName"
     datastore_name: "DatastoreName"
-    vm_name: "CoreOS-VM"
     vm_template: "CoreOS-Template"
     vm_folder: "VMs"
     vm_network: "VM Network"
@@ -17,9 +16,13 @@
     vm_cpu: 2
     vm_memory: 4096 # Memory in MB (4GB)
     guest_os: "coreos64Guest" # Guest OS identifier for Red Hat CoreOS
+    vm_names:
+      - "CoreOS-VM1"
+      - "CoreOS-VM2"
+      - "CoreOS-VM3"
 
   tasks:
-    - name: Deploy VM from template in powered off state
+    - name: Deploy VMs from template in powered off state
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -28,7 +31,7 @@
         datacenter: "{{ datacenter_name }}"
         cluster: "{{ cluster_name }}"
         datastore: "{{ datastore_name }}"
-        name: "{{ vm_name }}"
+        name: "{{ item }}"
         template: "{{ vm_template }}"
         folder: "{{ vm_folder }}"
         networks:
@@ -38,9 +41,26 @@
           num_cpus: "{{ vm_cpu }}"
           scsi: paravirtual
         state: present
+      loop: "{{ vm_names }}"
+      loop_control:
+        loop_var: item
       delegate_to: localhost
 
-    - name: Resize the disk to 200GB
+    - name: Gather information about the VMs
+      community.vmware.vmware_guest_info:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter: "{{ datacenter_name }}"
+        name: "{{ item }}"
+      loop: "{{ vm_names }}"
+      loop_control:
+        loop_var: item
+      register: vm_info
+      delegate_to: localhost
+
+    - name: Resize the existing disks to 200GB
       community.vmware.vmware_guest_disk:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
@@ -48,22 +68,28 @@
         validate_certs: no
         datacenter: "{{ datacenter_name }}"
         cluster: "{{ cluster_name }}"
-        name: "{{ vm_name }}"
+        name: "{{ item.vm_guest }}"
         disk:
-          - size_gb: "{{ vm_disk_size // 1024 }}"
+          - disk_id: "{{ item.hw_disk[0].disk_id }}"
+            size_gb: "{{ vm_disk_size // 1024 }}"
             type: thin
-            datastore: "{{ datastore_name }}"
             state: present
+      loop: "{{ vm_info.results }}"
+      loop_control:
+        loop_var: item
       delegate_to: localhost
 
-    - name: Power on the VM
+    - name: Power on the VMs
       community.vmware.vmware_guest:
         hostname: "{{ vcenter_hostname }}"
         username: "{{ vcenter_username }}"
         password: "{{ vcenter_password }}"
         validate_certs: no
         datacenter: "{{ datacenter_name }}"
-        name: "{{ vm_name }}"
+        name: "{{ item.vm_guest }}"
         state: poweredon
         wait_for_ip_address: yes
+      loop: "{{ vm_info.results }}"
+      loop_control:
+        loop_var: item
       delegate_to: localhost
