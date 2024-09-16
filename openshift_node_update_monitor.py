@@ -6,8 +6,8 @@ Ansible module to monitor OpenShift 4.10+ nodes during the update process.
 If a node is stuck in the update process for more than 10 minutes due to pods not being deleted,
 the module forcefully deletes those pods to allow the update to proceed.
 
-Author: Your Name
-Date: YYYY-MM-DD
+Author: Kacper Goc    
+Date: 2024-08-15
 """
 
 from ansible.module_utils.basic import AnsibleModule
